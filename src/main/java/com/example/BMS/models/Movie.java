@@ -7,11 +7,12 @@ import lombok.Setter;
 
 import java.util.List;
 
+@Entity
 @Getter
 @Setter
-@Entity
-public class City extends BaseModel{
+public class Movie extends BaseModel{
     private String name;
-    @OneToMany(mappedBy = "city")
-    private List<Theatre>theatres;
+    private String poster;
+    @OneToMany(mappedBy = "movie")
+    private List<Show> shows;
 }

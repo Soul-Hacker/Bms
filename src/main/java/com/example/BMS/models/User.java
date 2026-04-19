@@ -2,16 +2,19 @@ package com.example.BMS.models;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.OneToMany;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 
 import java.util.List;
 
+@Entity
 @Getter
 @Setter
-@Entity
-public class City extends BaseModel{
+public class User extends BaseModel{
+
     private String name;
-    @OneToMany(mappedBy = "city")
-    private List<Theatre>theatres;
+
+    private String email;
+
+    @OneToMany(mappedBy = "user")
+    private List<Ticket> tickets;
 }
