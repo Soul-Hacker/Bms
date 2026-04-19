@@ -11,7 +11,7 @@ import java.util.List;
 @Entity
 @Getter
 @Setter
-public class Theatre {
+public class Theatre extends BaseModel{
     private String name;
     private String address;
 
