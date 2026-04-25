@@ -34,3 +34,8 @@ build/
 
 ### Spring Boot Local Secrets ###
 *local.properties
+
+### Environment Variables ###
+.env
+.env.*
+!.env.example
