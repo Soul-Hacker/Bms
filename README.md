@@ -25,41 +25,236 @@ The project is organized into the following layers:
 
 A class diagram describing the architecture is available in `architecture.puml`.
 
-## Component Diagram
+## Architecture Diagram
+
+The architecture is rendered below in a UML-style layout. The diagram shows application layers, core entities, and dependencies.
+
+```text
+Controllers
+  MovieController --> MovieServiceImpl --> MovieRepository
+  BookingController --> RedisBookingService --> {ShowSeatRepository, ShowRepository, TicketRepository, UserRepository, CacheService}
+
+Services
+  MovieServiceImpl ..|> MovieService
+  RedisBookingService ..|> BookingService
+  RedisService ..|> CacheService
+
+Configuration
+  RedisConfig --> RedisTemplate
+  RedisConfig --> JedisConnectionFactory
+
+Domain
+  Movie --> Show --> ShowSeat --> {Seat, Ticket}
+  Ticket --> User
+  Show --> Auditorium --> Theatre --> City
+  Seat --> Auditorium
+  ShowSeat --> ShowSeatStatus
+  Ticket --> TicketStatus
+  Seat --> SeatType
+```
+
+```plantuml
+@startuml
+skinparam classAttributeIconSize 0
+
+package Controllers {
+  class BookingController {
+    +blockSeats(BlockSeatRequestDto): boolean
+    +clearAllSeatLocked(): void
+    +confirmBooking(BookSeatRequestDto): Optional<Ticket>
+  }
+  class MovieController {
+    +getAllMovies(): List<Movie>
+    +getMovieById(long): Movie
+  }
+}
+
+package Services {
+  interface BookingService
+  interface MovieService
+  interface CacheService
+  class MovieServiceImpl {
+    +findAllMovies(): List<Movie>
+    +findMoviesById(long): Optional<Movie>
+  }
+  class RedisBookingService {
+    +blockSeats(long, List<Long>, long): boolean
+    +bookTicket(long, List<Long>, long): Optional<Ticket>
+    +clearAllSeatLocks(): void
+  }
+  class RedisService {
+    +set(String, Object): void
+    +get(String): Object
+    +delete(String): void
+    +getAllkey(): void
+  }
+}
+
+package Repositories {
+  interface MovieRepository
+  interface ShowRepository
+  interface ShowSeatRepository
+  interface TicketRepository
+  interface UserRepository
+}
+
+package Configuration {
+  class RedisConfig {
+    +redisConnectionFactory(): JedisConnectionFactory
+    +redisTemplate(): RedisTemplate<String, String>
+  }
+}
+
+package DTO {
+  class BlockSeatRequestDto {
+    +showId: long
+    +userId: long
+    +seatId: List<Long>
+  }
+  class BookSeatRequestDto {
+    +showId: long
+    +userId: long
+    +seatId: List<Long>
+  }
+}
+
+package Domain {
+  class BaseModel {
+    +Id: Long
+    +createdAt: Date
+    +updatedAt: Date
+  }
+  class City {
+    +name: String
+  }
+  class Theatre {
+    +name: String
+    +address: String
+  }
+  class Auditorium {
+    +name: String
+    +capacity: int
+  }
+  class Movie {
+    +name: String
+    +poster: String
+  }
+  class Show {
+    +startTime: Date
+    +endTime: Date
+  }
+  class Seat {
+    +seatNumber: String
+    +rowValue: int
+    +columnValue: int
+  }
+  class ShowSeat {
+    +status: ShowSeatStatus
+  }
+  class Ticket {
+    +amount: int
+    +status: TicketStatus
+  }
+  class User {
+    +name: String
+    +email: String
+  }
+  enum SeatType {
+    NORMAL
+    PREMIUM
+    VIP
+    RECLINER
+  }
+  enum ShowSeatStatus {
+    AVAILABLE
+    BOOKED
+    BLOCKED
+    LOCKED
+  }
+  enum TicketStatus {
+    BOOKED
+    CANCELLED
+    PENDING
+  }
+}
+
+BookingController --> BookingService
+MovieController --> MovieService
+MovieServiceImpl ..|> MovieService
+RedisBookingService ..|> BookingService
+RedisService ..|> CacheService
+MovieServiceImpl --> MovieRepository
+RedisBookingService --> CacheService
+RedisBookingService --> ShowSeatRepository
+RedisBookingService --> ShowRepository
+RedisBookingService --> TicketRepository
+RedisBookingService --> UserRepository
+RedisConfig --> RedisTemplate
+RedisConfig --> JedisConnectionFactory
+BookingController --> BlockSeatRequestDto
+BookingController --> BookSeatRequestDto
+
+Movie --> Show
+Show --> Movie
+Show --> Auditorium
+Show --> ShowSeat
+ShowSeat --> Seat
+ShowSeat --> Ticket
+Ticket --> User
+Ticket --> Show
+Seat --> Auditorium
+Auditorium --> Theatre
+Theatre --> City
+ShowSeat --> ShowSeatStatus
+Ticket --> TicketStatus
+Seat --> SeatType
+
+BaseModel <|-- City
+BaseModel <|-- Theatre
+BaseModel <|-- Auditorium
+BaseModel <|-- Movie
+BaseModel <|-- Show
+BaseModel <|-- Seat
+BaseModel <|-- ShowSeat
+BaseModel <|-- Ticket
+BaseModel <|-- User
+
+@enduml
+```
 
 ### Controllers
 
-- `MovieController` 
-  - exposes `GET /api/v1/movies`
-  - exposes `GET /api/v1/movies/{id}`
-  - delegates to `MovieService`
+- `MovieController`
+  - `GET /api/v1/movies`
+  - `GET /api/v1/movies/{id}`
+  - Delegates to `MovieService`
 
 - `BookingController`
-  - exposes `POST /api/v1/booking/block`
-  - exposes `POST /api/v1/booking/confirm`
-  - exposes `DELETE /api/v1/booking`
-  - delegates to `BookingService`
+  - `POST /api/v1/booking/block`
+  - `POST /api/v1/booking/confirm`
+  - `DELETE /api/v1/booking`
+  - Delegates to `BookingService`
 
 ### Services
 
 - `MovieServiceImpl`
-  - implements `MovieService`
-  - uses `MovieRepository`
+  - Implements `MovieService`
+  - Uses `MovieRepository`
 
 - `RedisBookingService`
-  - implements `BookingService`
-  - uses `CacheService`, `ShowSeatRepository`, `ShowRepository`, `TicketRepository`, and `UserRepository`
-  - blocks seats in Redis and confirms bookings with a transactional bulk update
+  - Implements `BookingService`
+  - Uses `CacheService`, `ShowSeatRepository`, `ShowRepository`, `TicketRepository`, `UserRepository`
+  - Blocks seats in Redis and confirms bookings using a transactional bulk update
 
 - `RedisService`
-  - implements `CacheService`
-  - uses Spring Redis template to store and read seat locks
+  - Implements `CacheService`
+  - Uses Spring Redis template to store and read seat locks
 
 ### Configuration
 
 - `RedisConfig`
-  - provides Redis connection factory and `RedisTemplate<String, String>` beans
-  - reads configuration from environment variables
+  - Provides Redis connection factory and `RedisTemplate<String, String>` beans
+  - Reads configuration from environment variables
 
 ## Domain Model
 
