@@ -1,0 +1,166 @@
+@startuml
+skinparam classAttributeIconSize 0
+
+package Controllers {
+  class BookingController {
+    +blockSeats(BlockSeatRequestDto): boolean
+    +clearAllSeatLocked(): void
+    +confirmBooking(BookSeatRequestDto): Optional<Ticket>
+  }
+  class MovieController {
+    +getAllMovies(): List<Movie>
+    +getMovieById(long): Movie
+  }
+}
+
+package Services {
+  interface BookingService
+  interface MovieService
+  interface CacheService
+  class MovieServiceImpl {
+    +findAllMovies(): List<Movie>
+    +findMoviesById(long): Optional<Movie>
+  }
+  class RedisBookingService {
+    +blockSeats(long, List<Long>, long): boolean
+    +bookTicket(long, List<Long>, long): Optional<Ticket>
+    +clearAllSeatLocks(): void
+  }
+  class RedisService {
+    +set(String, Object): void
+    +get(String): Object
+    +delete(String): void
+    +getAllkey(): void
+  }
+}
+
+package Repositories {
+  interface MovieRepository
+  interface ShowRepository
+  interface ShowSeatRepository
+  interface TicketRepository
+  interface UserRepository
+}
+
+package Configuration {
+  class RedisConfig {
+    +redisConnectionFactory(): JedisConnectionFactory
+    +redisTemplate(): RedisTemplate<String, String>
+  }
+}
+
+package DTO {
+  class BlockSeatRequestDto {
+    +showId: long
+    +userId: long
+    +seatId: List<Long>
+  }
+  class BookSeatRequestDto {
+    +showId: long
+    +userId: long
+    +seatId: List<Long>
+  }
+}
+
+package Domain {
+  class BaseModel {
+    +Id: Long
+    +createdAt: Date
+    +updatedAt: Date
+  }
+  class City {
+    +name: String
+  }
+  class Theatre {
+    +name: String
+    +address: String
+  }
+  class Auditorium {
+    +name: String
+    +capacity: int
+  }
+  class Movie {
+    +name: String
+    +poster: String
+  }
+  class Show {
+    +startTime: Date
+    +endTime: Date
+  }
+  class Seat {
+    +seatNumber: String
+    +rowValue: int
+    +columnValue: int
+  }
+  class ShowSeat {
+    +status: ShowSeatStatus
+  }
+  class Ticket {
+    +amount: int
+    +status: TicketStatus
+  }
+  class User {
+    +name: String
+    +email: String
+  }
+  enum SeatType {
+    NORMAL
+    PREMIUM
+    VIP
+    RECLINER
+  }
+  enum ShowSeatStatus {
+    AVAILABLE
+    BOOKED
+    BLOCKED
+    LOCKED
+  }
+  enum TicketStatus {
+    BOOKED
+    CANCELLED
+    PENDING
+  }
+}
+
+BookingController --> BookingService
+MovieController --> MovieService
+MovieServiceImpl ..|> MovieService
+RedisBookingService ..|> BookingService
+RedisService ..|> CacheService
+MovieServiceImpl --> MovieRepository
+RedisBookingService --> CacheService
+RedisBookingService --> ShowSeatRepository
+RedisBookingService --> ShowRepository
+RedisBookingService --> TicketRepository
+RedisBookingService --> UserRepository
+RedisConfig --> RedisTemplate
+RedisConfig --> JedisConnectionFactory
+BookingController --> BlockSeatRequestDto
+BookingController --> BookSeatRequestDto
+
+Movie --> Show
+Show --> Movie
+Show --> Auditorium
+Show --> ShowSeat
+ShowSeat --> Seat
+ShowSeat --> Ticket
+Ticket --> User
+Ticket --> Show
+Seat --> Auditorium
+Auditorium --> Theatre
+Theatre --> City
+ShowSeat --> ShowSeatStatus
+Ticket --> TicketStatus
+Seat --> SeatType
+
+BaseModel <|-- City
+BaseModel <|-- Theatre
+BaseModel <|-- Auditorium
+BaseModel <|-- Movie
+BaseModel <|-- Show
+BaseModel <|-- Seat
+BaseModel <|-- ShowSeat
+BaseModel <|-- Ticket
+BaseModel <|-- User
+
+@enduml
