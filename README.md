@@ -12,251 +12,176 @@ This project is a Spring Boot-based movie booking system built with:
 
 The app exposes REST APIs to manage movies and seat booking.
 
-## Architecture
+## Architecture summary
 
-The project is organized into the following layers:
+The application is built in layers:
 
-- `controllers` — REST endpoints for booking and movie lookup
-- `services` — business logic and reusable abstractions
-- `repositories` — JPA data access interfaces
-- `models` — JPA entities and enums for the domain model
-- `configuration` — Redis connection setup
-- `dto` — request payload objects
+- `controllers` — REST API entry points for movies and booking actions
+- `services` — business logic and orchestration for booking and movie retrieval
+- `repositories` — Spring Data JPA persistence for domain entities
+- `configuration` — Redis connection and infrastructure beans
+- `models` — JPA entities and enums for the booking domain
+- `dto` — request payload objects for booking actions
 
-A class diagram describing the architecture is available in `architecture.puml`.
+## Component interactions
 
-## Architecture Diagram
+- `MovieController` serves movie read endpoints and delegates to `MovieService`
+- `BookingController` handles seat block, booking confirmation, and stale-lock cleanup via `BookingService`
+- `MovieServiceImpl` retrieves movies from `MovieRepository`
+- `RedisBookingService` implements booking flow and uses `CacheService` plus multiple repositories
+- `RedisService` performs Redis-based seat lock reads and writes
+- `RedisConfig` builds Redis connection and template beans from environment variables
 
-The architecture is rendered below in a UML-style layout. The diagram shows application layers, core entities, and dependencies.
+## UML class diagram
 
-```text
-Controllers
-  MovieController --> MovieServiceImpl --> MovieRepository
-  BookingController --> RedisBookingService --> {ShowSeatRepository, ShowRepository, TicketRepository, UserRepository, CacheService}
+```mermaid
+classDiagram
+    class MovieController {
+        +getAllMovies(): List~Movie~
+        +getMovieById(long): Movie
+    }
+    class BookingController {
+        +blockSeats(BlockSeatRequestDto): boolean
+        +confirmBooking(BookSeatRequestDto): Optional~Ticket~
+        +clearAllSeatLocked(): void
+    }
+    class MovieServiceImpl {
+        +findAllMovies(): List~Movie~
+        +findMoviesById(long): Optional~Movie~
+    }
+    class RedisBookingService {
+        +blockSeats(long, List~Long~, long): boolean
+        +bookTicket(long, List~Long~, long): Optional~Ticket~
+        +clearAllSeatLocks(): void
+    }
+    class RedisService {
+        +set(String, Object): void
+        +get(String): Object
+        +delete(String): void
+        +getAllkey(): void
+    }
+    class RedisConfig {
+        +redisConnectionFactory(): JedisConnectionFactory
+        +redisTemplate(): RedisTemplate~String, String~
+    }
+    class BlockSeatRequestDto {
+        +showId: long
+        +userId: long
+        +seatId: List~Long~
+    }
+    class BookSeatRequestDto {
+        +showId: long
+        +userId: long
+        +seatId: List~Long~
+    }
+    class Movie {
+        +name: String
+        +poster: String
+    }
+    class Show {
+        +startTime: Date
+        +endTime: Date
+    }
+    class Seat {
+        +seatNumber: String
+        +rowValue: int
+        +columnValue: int
+    }
+    class ShowSeat {
+        +status: ShowSeatStatus
+    }
+    class Ticket {
+        +amount: int
+        +status: TicketStatus
+    }
+    class User {
+        +name: String
+        +email: String
+    }
+    class City {
+        +name: String
+    }
+    class Theatre {
+        +name: String
+        +address: String
+    }
+    class Auditorium {
+        +name: String
+        +capacity: int
+    }
+    class BaseModel {
+        +Id: Long
+        +createdAt: Date
+        +updatedAt: Date
+    }
 
-Services
-  MovieServiceImpl ..|> MovieService
-  RedisBookingService ..|> BookingService
-  RedisService ..|> CacheService
+    MovieController --> MovieServiceImpl
+    BookingController --> RedisBookingService
+    MovieServiceImpl --> MovieRepository
+    RedisBookingService --> ShowSeatRepository
+    RedisBookingService --> ShowRepository
+    RedisBookingService --> TicketRepository
+    RedisBookingService --> UserRepository
+    RedisBookingService --> RedisService
+    RedisService --> RedisConfig
+    RedisConfig --> RedisTemplate
+    RedisConfig --> JedisConnectionFactory
 
-Configuration
-  RedisConfig --> RedisTemplate
-  RedisConfig --> JedisConnectionFactory
+    Movie --> Show
+    Show --> Movie
+    Show --> Auditorium
+    Show --> ShowSeat
+    ShowSeat --> Seat
+    ShowSeat --> Ticket
+    Ticket --> User
+    Ticket --> Show
+    Seat --> Auditorium
+    Auditorium --> Theatre
+    Theatre --> City
 
-Domain
-  Movie --> Show --> ShowSeat --> {Seat, Ticket}
-  Ticket --> User
-  Show --> Auditorium --> Theatre --> City
-  Seat --> Auditorium
-  ShowSeat --> ShowSeatStatus
-  Ticket --> TicketStatus
-  Seat --> SeatType
+    BaseModel <|-- Movie
+    BaseModel <|-- Show
+    BaseModel <|-- Seat
+    BaseModel <|-- ShowSeat
+    BaseModel <|-- Ticket
+    BaseModel <|-- User
+    BaseModel <|-- City
+    BaseModel <|-- Theatre
+    BaseModel <|-- Auditorium
 ```
 
-```plantuml
-@startuml
-skinparam classAttributeIconSize 0
+## Notes
 
-package Controllers {
-  class BookingController {
-    +blockSeats(BlockSeatRequestDto): boolean
-    +clearAllSeatLocked(): void
-    +confirmBooking(BookSeatRequestDto): Optional<Ticket>
-  }
-  class MovieController {
-    +getAllMovies(): List<Movie>
-    +getMovieById(long): Movie
-  }
-}
+- `RedisBookingService.clearAllSeatLocks()` is currently empty and should be implemented to remove stale seat lock keys.
+- `MovieController.getMovieById()` returns `null` when a movie is not found; consider returning a proper 404 response.
+- `ShowSeatRepository.bookShowSeatsBulk()` uses a JPQL update setting `status = 1`, which relies on the enum ordinal mapping for `ShowSeatStatus.BOOKED`.
 
-package Services {
-  interface BookingService
-  interface MovieService
-  interface CacheService
-  class MovieServiceImpl {
-    +findAllMovies(): List<Movie>
-    +findMoviesById(long): Optional<Movie>
-  }
-  class RedisBookingService {
-    +blockSeats(long, List<Long>, long): boolean
-    +bookTicket(long, List<Long>, long): Optional<Ticket>
-    +clearAllSeatLocks(): void
-  }
-  class RedisService {
-    +set(String, Object): void
-    +get(String): Object
-    +delete(String): void
-    +getAllkey(): void
-  }
-}
+## Recommended improvements
 
-package Repositories {
-  interface MovieRepository
-  interface ShowRepository
-  interface ShowSeatRepository
-  interface TicketRepository
-  interface UserRepository
-}
+1. Add error handling and proper HTTP responses for missing movies or invalid booking requests
+2. Implement `BookingService.clearAllSeatLocks()` to clean Redis locks
+3. Consider returning `ResponseEntity` in controllers for clearer status codes
+4. Add logging and validation to the booking flow
+5. Add API documentation (Swagger/OpenAPI)
 
-package Configuration {
-  class RedisConfig {
-    +redisConnectionFactory(): JedisConnectionFactory
-    +redisTemplate(): RedisTemplate<String, String>
-  }
-}
+## How to Run
 
-package DTO {
-  class BlockSeatRequestDto {
-    +showId: long
-    +userId: long
-    +seatId: List<Long>
-  }
-  class BookSeatRequestDto {
-    +showId: long
-    +userId: long
-    +seatId: List<Long>
-  }
-}
+Set these environment variables:
 
-package Domain {
-  class BaseModel {
-    +Id: Long
-    +createdAt: Date
-    +updatedAt: Date
-  }
-  class City {
-    +name: String
-  }
-  class Theatre {
-    +name: String
-    +address: String
-  }
-  class Auditorium {
-    +name: String
-    +capacity: int
-  }
-  class Movie {
-    +name: String
-    +poster: String
-  }
-  class Show {
-    +startTime: Date
-    +endTime: Date
-  }
-  class Seat {
-    +seatNumber: String
-    +rowValue: int
-    +columnValue: int
-  }
-  class ShowSeat {
-    +status: ShowSeatStatus
-  }
-  class Ticket {
-    +amount: int
-    +status: TicketStatus
-  }
-  class User {
-    +name: String
-    +email: String
-  }
-  enum SeatType {
-    NORMAL
-    PREMIUM
-    VIP
-    RECLINER
-  }
-  enum ShowSeatStatus {
-    AVAILABLE
-    BOOKED
-    BLOCKED
-    LOCKED
-  }
-  enum TicketStatus {
-    BOOKED
-    CANCELLED
-    PENDING
-  }
-}
+- `MYSQL_URL`
+- `MYSQL_USERNAME`
+- `MYSQL_PASSWORD`
+- `REDIS_HOST`
+- `REDIS_PORT`
+- `REDIS_USERNAME`
+- `REDIS_PASSWORD`
 
-BookingController --> BookingService
-MovieController --> MovieService
-MovieServiceImpl ..|> MovieService
-RedisBookingService ..|> BookingService
-RedisService ..|> CacheService
-MovieServiceImpl --> MovieRepository
-RedisBookingService --> CacheService
-RedisBookingService --> ShowSeatRepository
-RedisBookingService --> ShowRepository
-RedisBookingService --> TicketRepository
-RedisBookingService --> UserRepository
-RedisConfig --> RedisTemplate
-RedisConfig --> JedisConnectionFactory
-BookingController --> BlockSeatRequestDto
-BookingController --> BookSeatRequestDto
+Then run:
 
-Movie --> Show
-Show --> Movie
-Show --> Auditorium
-Show --> ShowSeat
-ShowSeat --> Seat
-ShowSeat --> Ticket
-Ticket --> User
-Ticket --> Show
-Seat --> Auditorium
-Auditorium --> Theatre
-Theatre --> City
-ShowSeat --> ShowSeatStatus
-Ticket --> TicketStatus
-Seat --> SeatType
-
-BaseModel <|-- City
-BaseModel <|-- Theatre
-BaseModel <|-- Auditorium
-BaseModel <|-- Movie
-BaseModel <|-- Show
-BaseModel <|-- Seat
-BaseModel <|-- ShowSeat
-BaseModel <|-- Ticket
-BaseModel <|-- User
-
-@enduml
+```bash
+./mvnw spring-boot:run
 ```
 
-### Controllers
-
-- `MovieController`
-  - `GET /api/v1/movies`
-  - `GET /api/v1/movies/{id}`
-  - Delegates to `MovieService`
-
-- `BookingController`
-  - `POST /api/v1/booking/block`
-  - `POST /api/v1/booking/confirm`
-  - `DELETE /api/v1/booking`
-  - Delegates to `BookingService`
-
-### Services
-
-- `MovieServiceImpl`
-  - Implements `MovieService`
-  - Uses `MovieRepository`
-
-- `RedisBookingService`
-  - Implements `BookingService`
-  - Uses `CacheService`, `ShowSeatRepository`, `ShowRepository`, `TicketRepository`, `UserRepository`
-  - Blocks seats in Redis and confirms bookings using a transactional bulk update
-
-- `RedisService`
-  - Implements `CacheService`
-  - Uses Spring Redis template to store and read seat locks
-
-### Configuration
-
-- `RedisConfig`
-  - Provides Redis connection factory and `RedisTemplate<String, String>` beans
-  - Reads configuration from environment variables
-
-## Domain Model
 
 The core domain entities are:
 
