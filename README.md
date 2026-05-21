@@ -32,122 +32,40 @@ The application is built in layers:
 - `RedisService` performs Redis-based seat lock reads and writes
 - `RedisConfig` builds Redis connection and template beans from environment variables
 
-## UML class diagram
+## Architecture diagram
 
-```mermaid
-classDiagram
-    class MovieController {
-        +getAllMovies(): List~Movie~
-        +getMovieById(long): Movie
-    }
-    class BookingController {
-        +blockSeats(BlockSeatRequestDto): boolean
-        +confirmBooking(BookSeatRequestDto): Optional~Ticket~
-        +clearAllSeatLocked(): void
-    }
-    class MovieServiceImpl {
-        +findAllMovies(): List~Movie~
-        +findMoviesById(long): Optional~Movie~
-    }
-    class RedisBookingService {
-        +blockSeats(long, List~Long~, long): boolean
-        +bookTicket(long, List~Long~, long): Optional~Ticket~
-        +clearAllSeatLocks(): void
-    }
-    class RedisService {
-        +set(String, Object): void
-        +get(String): Object
-        +delete(String): void
-        +getAllkey(): void
-    }
-    class RedisConfig {
-        +redisConnectionFactory(): JedisConnectionFactory
-        +redisTemplate(): RedisTemplate~String, String~
-    }
-    class BlockSeatRequestDto {
-        +showId: long
-        +userId: long
-        +seatId: List~Long~
-    }
-    class BookSeatRequestDto {
-        +showId: long
-        +userId: long
-        +seatId: List~Long~
-    }
-    class Movie {
-        +name: String
-        +poster: String
-    }
-    class Show {
-        +startTime: Date
-        +endTime: Date
-    }
-    class Seat {
-        +seatNumber: String
-        +rowValue: int
-        +columnValue: int
-    }
-    class ShowSeat {
-        +status: ShowSeatStatus
-    }
-    class Ticket {
-        +amount: int
-        +status: TicketStatus
-    }
-    class User {
-        +name: String
-        +email: String
-    }
-    class City {
-        +name: String
-    }
-    class Theatre {
-        +name: String
-        +address: String
-    }
-    class Auditorium {
-        +name: String
-        +capacity: int
-    }
-    class BaseModel {
-        +Id: Long
-        +createdAt: Date
-        +updatedAt: Date
-    }
+The following ASCII-style diagram shows the main architecture and relationships so it renders directly in the README.
 
-    MovieController --> MovieServiceImpl
-    BookingController --> RedisBookingService
-    MovieServiceImpl --> MovieRepository
-    RedisBookingService --> ShowSeatRepository
-    RedisBookingService --> ShowRepository
-    RedisBookingService --> TicketRepository
-    RedisBookingService --> UserRepository
-    RedisBookingService --> RedisService
-    RedisService --> RedisConfig
-    RedisConfig --> RedisTemplate
-    RedisConfig --> JedisConnectionFactory
+```text
++----------------+      +------------------+      +----------------+
+| MovieController| ---> | MovieServiceImpl | ---> | MovieRepository|
++----------------+      +------------------+      +----------------+
 
-    Movie --> Show
-    Show --> Movie
-    Show --> Auditorium
-    Show --> ShowSeat
-    ShowSeat --> Seat
-    ShowSeat --> Ticket
-    Ticket --> User
-    Ticket --> Show
-    Seat --> Auditorium
-    Auditorium --> Theatre
-    Theatre --> City
++----------------+      +--------------------+      +-------------------+
+|BookingController| ---> |RedisBookingService| ---> | ShowSeatRepository|
+|                |      |                    | ---> | ShowRepository    |
+|                |      |                    | ---> | TicketRepository  |
+|                |      |                    | ---> | UserRepository    |
+|                |      |                    | ---> | CacheService      |
++----------------+      +--------------------+      +-------------------+
 
-    BaseModel <|-- Movie
-    BaseModel <|-- Show
-    BaseModel <|-- Seat
-    BaseModel <|-- ShowSeat
-    BaseModel <|-- Ticket
-    BaseModel <|-- User
-    BaseModel <|-- City
-    BaseModel <|-- Theatre
-    BaseModel <|-- Auditorium
++----------------+
+|  RedisService  | ---> RedisConfig
++----------------+
+
++----------------+
+|   RedisConfig  | ---> RedisTemplate
+|                | ---> JedisConnectionFactory
++----------------+
+
+Domain relationships:
+Movie --> Show --> ShowSeat --> [Seat, Ticket]
+Ticket --> User
+Show --> Auditorium --> Theatre --> City
+Seat --> Auditorium
+ShowSeat --> ShowSeatStatus
+Ticket --> TicketStatus
+Seat --> SeatType
 ```
 
 ## Notes
